@@ -6,11 +6,32 @@ let sharedAudioContext: AudioContext | null = null;
 let isAudioUnlocked = false;
 
 /**
+ * Configure la session audio iOS en mode "playback" (multimédia / musique)
+ * pour éviter qu'iOS ne bascule sur le canal "appel téléphonique" (combiné / earpiece)
+ * et garantit l'utilisation de la barre de volume média standard.
+ */
+export const enforceMediaAudioSession = () => {
+  if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+    try {
+      const audioSession = (navigator as any).audioSession;
+      if (audioSession.type !== 'playback') {
+        audioSession.type = 'playback';
+      }
+    } catch (e) {
+      // Certains navigateurs peuvent ignorer ou restreindre l'écriture
+    }
+  }
+};
+
+/**
  * Déverrouille l'audio sur iOS Safari et navigateurs mobiles lors d'une interaction utilisateur (clic / tap).
- * Joue un micro-buffer silencieux pour autoriser la lecture asynchrone ultérieure sans blocage de l'autoplay.
+ * Joue un micro-buffer silencieux pour autoriser la lecture asynchrone ultérieure sans blocage de l'autoplay,
+ * et force le canal média standard.
  */
 export const unlockAudioContext = async (): Promise<AudioContext | null> => {
   if (typeof window === 'undefined') return null;
+
+  enforceMediaAudioSession();
 
   try {
     const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -55,7 +76,8 @@ export const audioManager = {
   ): HTMLAudioElement {
     this.stopAll();
 
-    // Déverrouillage préventif immédiat
+    // Forcer le canal média standard (musique / vidéo) et déverrouiller
+    enforceMediaAudioSession();
     unlockAudioContext().catch(() => {});
 
     const audio = new Audio();
@@ -68,6 +90,13 @@ export const audioManager = {
     audio.src = src;
     audio.playbackRate = 1.0;
     audio.defaultPlaybackRate = 1.0;
+
+    // Si setSinkId est supporté (standards modernes), tenter de router sur les haut-parleurs
+    if (typeof (audio as any).setSinkId === 'function') {
+      try {
+        (audio as any).setSinkId('speaker').catch(() => {});
+      } catch {}
+    }
 
     currentAudio = audio;
 
@@ -396,6 +425,8 @@ export const audioManager = {
           } catch {}
         }
         isRunning = false;
+        // Rétablir immédiatement le canal média standard
+        enforceMediaAudioSession();
       },
       stop: () => {
         shouldKeepRunning = false;
@@ -404,6 +435,8 @@ export const audioManager = {
         accumulatedText = '';
         cleanupInstance();
         isRunning = false;
+        // Rétablir immédiatement le canal média standard
+        enforceMediaAudioSession();
       },
     };
   },

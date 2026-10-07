@@ -12,9 +12,32 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
   {
-    version: '1.0.1',
+    version: '1.0.2',
     date: '07 Octobre 2026',
     isLatest: true,
+    title: 'Canal Média Standard & Sortie Haut-Parleur (iOS)',
+    highlights: [
+      {
+        category: '🎵 Canal Média (Non-Téléphonique)',
+        description:
+          "Verrouillage de l'API navigator.audioSession en mode 'playback'. Le retour audio utilise désormais la barre de volume multimédia normale (musique/vidéo) et non la barre d'appel téléphonique étouffée.",
+      },
+      {
+        category: '📢 Forçage Haut-Parleur Principal',
+        description:
+          "Routage matériel forcé vers le haut-parleur externe (speaker) dès que l'IA parle, empêchant la bascule vers le petit écouteur d'oreille d'iPhone.",
+      },
+      {
+        category: '🔄 Rétablissement Instantané du Canal',
+        description:
+          "Dès que le micro se coupe ou marque une pause, le canal média est réinitialisé immédiatement pour une écoute claire et forte.",
+      },
+    ],
+  },
+  {
+    version: '1.0.1',
+    date: '07 Octobre 2026',
+    isLatest: false,
     title: 'Optimisations iOS Safari & Mobile (Son & Micro)',
     highlights: [
       {

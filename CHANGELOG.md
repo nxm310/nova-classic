@@ -4,6 +4,19 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.0.2] — 2026-10-07
+
+### 🔊 Routage Multimédia & Forçage Haut-Parleur (iOS)
+* **Verrouillage du Canal Audio Multimédia (`navigator.audioSession`)** :
+  * Désactivation du profil "appel téléphonique" (combiné earpiece étouffé) imposé par iOS Safari lors de l'activation du micro.
+  * Forçage de la session en mode `'playback'` pour utiliser la barre de volume multimédia normale (musique / vidéo).
+* **Forçage Haut-Parleur Externe (`setSinkId('speaker')`)** :
+  * Redirection matérielle vers le haut-parleur principal pour restituer le son fort et clair.
+* **Rétablissement Automatique du Canal Média** :
+  * Restauration immédiate du mode multimédia dès que la prise de son s'interrompt ou marque une pause.
+
+---
+
 ## [v1.0.1] — 2026-10-07
 
 ### 📱 Optimisations iOS Safari & Mobile (Son & Micro)
