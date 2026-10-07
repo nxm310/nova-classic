@@ -12,9 +12,37 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
   {
-    version: '1.0.3',
+    version: '1.1.0',
     date: '07 Octobre 2026',
     isLatest: true,
+    title: 'Lecture de Livres ePUB, Documents PDF & Fichiers Texte',
+    highlights: [
+      {
+        category: '➕ Bouton d\'Ajout de Fichiers (+)',
+        description:
+          "Intégration d'un bouton '+' direct à côté du champ de message pour joindre et faire lire des livres numériques au format ePUB, des documents PDF ou des fichiers texte.",
+      },
+      {
+        category: '📚 Analyse Complète de Livres ePUB',
+        description:
+          "Extraction automatique et propre des chapitres XHTML de vos fichiers .epub (sans balises de style ni code résiduel) pour résumer, poser des questions ou discuter d'un livre avec Nova.",
+      },
+      {
+        category: '📄 Synthèse & Décryptage PDF',
+        description:
+          "Moteur de lecture PDF côté client capable d'extraire le texte page par page pour analyser rapports, manuels ou documents en un clic.",
+      },
+      {
+        category: '💬 Badge Visuel & Prompt Enrichi',
+        description:
+          "Affichage d'un badge élégant indiquant le nom, le type et le nombre de pages du document dans la bulle de discussion, avec injection optimale dans le contexte de Gemini.",
+      },
+    ],
+  },
+  {
+    version: '1.0.3',
+    date: '07 Octobre 2026',
+    isLatest: false,
     title: 'Déblocage Voix Asynchrone & Libération Matérielle iOS',
     highlights: [
       {

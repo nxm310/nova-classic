@@ -4,6 +4,21 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.1.0] — 2026-10-07
+
+### 📚 Lecture de Livres ePUB, Documents PDF & Fichiers Texte
+* **Bouton d'Ajout de Fichiers (`+`) dans le Chat** :
+  * Intégration d'un bouton d'envoi rapide `+` à gauche du micro dans la barre de saisie pour sélectionner un livre au format `.epub`, un document `.pdf`, ou un fichier texte `.txt` / `.md`.
+* **Moteur d'Extraction ePUB Natif** :
+  * Décompression de l'archive ePub et parsing intelligent des chapitres XHTML pour éliminer les balises de code et styles résiduels.
+* **Lecteur & Décrypteur PDF Intégré** :
+  * Extraction textuelle page par page des documents PDF côté navigateur via `pdfjs-dist`.
+* **Badges Visuels & Contexte Enrichi** :
+  * Affichage d'un badge clair avec le nom du fichier, le format et le nombre de pages/sections directement dans la bulle du message.
+  * Injection structurée du texte extrait dans le prompt envoyé à Gemini avec suggestion d'analyse automatique.
+
+---
+
 ## [v1.0.3] — 2026-10-07
 
 ### ⚡ Déblocage Voix Asynchrone & Libération Matérielle (iOS Safari)

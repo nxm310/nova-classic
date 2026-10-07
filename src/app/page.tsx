@@ -17,6 +17,7 @@ import { ChangelogModal } from '@/components/ChangelogModal';
 import { TelemetryWidget } from '@/components/TelemetryWidget';
 import { visionManager } from '@/lib/vision';
 import { geminiClient } from '@/lib/geminiClient';
+import { parseDocumentFile, ExtractedDocument } from '@/lib/documentReader';
 import {
   Settings,
   Send,
@@ -43,6 +44,11 @@ import {
   Calendar,
   User,
   MessageSquare,
+  Plus,
+  Paperclip,
+  FileText,
+  BookOpen,
+  FileUp,
 } from 'lucide-react';
 import { APP_VERSION } from '@/lib/version';
 
@@ -57,6 +63,11 @@ export default function NovaClassicApp() {
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Document attaché (ePub, PDF, TXT)
+  const [attachedDoc, setAttachedDoc] = useState<ExtractedDocument | null>(null);
+  const [isReadingDoc, setIsReadingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Vision écran et flux d'analyse
   const [isVisionActive, setIsVisionActive] = useState(false);
@@ -259,20 +270,82 @@ export default function NovaClassicApp() {
     }
   };
 
+  // Gestion de la sélection d'un fichier (ePub, PDF, TXT)
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input pour permettre de sélectionner à nouveau le même fichier
+    e.target.value = '';
+
+    setIsReadingDoc(true);
+    try {
+      const extracted = await parseDocumentFile(file);
+      setAttachedDoc(extracted);
+      // Pré-remplir la barre avec une consigne par défaut si elle est vide
+      if (!inputText.trim()) {
+        if (extracted.type === 'epub') {
+          setInputText(`J'ai attaché le livre ePub « ${extracted.name} ». Fais-moi un résumé du contenu et explique-moi de quoi il parle.`);
+        } else if (extracted.type === 'pdf') {
+          setInputText(`J'ai attaché le document PDF « ${extracted.name} » (${extracted.pageCount || '?'} pages). Peux-tu analyser son contenu et m'en faire une synthèse claire ?`);
+        } else {
+          setInputText(`J'ai attaché le fichier « ${extracted.name} ». Peux-tu le lire et me dire ce que tu en penses ?`);
+        }
+      }
+    } catch (err: any) {
+      console.error('Erreur lecture document:', err);
+      alert(err.message || 'Impossible de lire ce document.');
+    } finally {
+      setIsReadingDoc(false);
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || inputText).trim();
-    if (!text || isLoading) return;
+    const rawText = (textToSend || inputText).trim();
+    if ((!rawText && !attachedDoc) || isLoading) return;
 
     // Déverrouiller le canal audio sur l'interaction utilisateur (crucial pour iOS Safari)
     audioManager.unlock().catch(() => {});
 
     if (!textToSend) setInputText('');
 
+    // Sauvegarde et réinitialisation du document en cours d'envoi
+    const currentDoc = attachedDoc;
+    setAttachedDoc(null);
+
+    const promptText = rawText || (currentDoc ? `Voici le document « ${currentDoc.name} ». Peux-tu l'analyser et m'expliquer ce qu'il contient ?` : '');
+
+    // Construire le prompt complet envoyé à Gemini (incluant le texte extrait du document)
+    let fullPromptForGemini = promptText;
+    if (currentDoc) {
+      // Limiter à ~250 000 caractères (~60k tokens) pour rester largement dans le context window de Gemini 3.8 / 2.5
+      const truncatedDocText =
+        currentDoc.text.length > 250000
+          ? currentDoc.text.slice(0, 250000) + '\n\n[... Le document est très long, suite tronquée pour analyse optimale ...]'
+          : currentDoc.text;
+
+      fullPromptForGemini = `[DOCUMENT FOURNI PAR L'UTILISATEUR : ${currentDoc.name} (${currentDoc.type.toUpperCase()}${currentDoc.pageCount ? `, ${currentDoc.pageCount} pages` : ''})]
+${truncatedDocText}
+[FIN DU DOCUMENT]
+
+Demande de l'utilisateur concernant ce document :
+${promptText}`;
+    }
+
     const userMessage: ChatMessage = {
       id: 'msg_' + Date.now() + '_u',
       role: 'user',
-      content: text,
+      content: promptText,
       timestamp: Date.now(),
+      attachedDocument: currentDoc
+        ? {
+            name: currentDoc.name,
+            size: currentDoc.size,
+            type: currentDoc.type,
+            pageCount: currentDoc.pageCount,
+            charCount: currentDoc.charCount,
+          }
+        : undefined,
     };
 
     const newHistory = [...messagesRef.current, userMessage];
@@ -286,10 +359,14 @@ export default function NovaClassicApp() {
 
     try {
       const apiKey = storage.getApiKey();
-      const formattedHistory = newHistory.map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }));
+      const formattedHistory = newHistory.map((m, index) => {
+        // Pour le dernier message utilisateur, on injecte le texte complet avec le document
+        const isLatest = index === newHistory.length - 1;
+        return {
+          role: m.role as 'user' | 'assistant',
+          content: isLatest ? fullPromptForGemini : m.content,
+        };
+      });
 
       const botReply = await geminiClient.sendMessage({
         messages: formattedHistory,
@@ -742,6 +819,10 @@ export default function NovaClassicApp() {
                     <span>Appel DirectLive Mains-Libres</span>
                   </div>
                   <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-300 shadow-sm">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Lecteur ePUB & PDF</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-300 shadow-sm">
                     <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                     <span>Voix Google AI Studio</span>
                   </div>
@@ -821,6 +902,39 @@ export default function NovaClassicApp() {
 
                       {/* Bulle de message */}
                       <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}>
+                        {/* Badge document attaché si présent */}
+                        {message.attachedDocument && (
+                          <div
+                            className={`mb-1.5 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 border shadow-sm ${
+                              isUser
+                                ? 'bg-cyan-900/60 border-cyan-400/50 text-cyan-200'
+                                : 'bg-slate-900 border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            {message.attachedDocument.type === 'epub' ? (
+                              <BookOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                            ) : message.attachedDocument.type === 'pdf' ? (
+                              <FileText className="w-4 h-4 text-rose-400 shrink-0" />
+                            ) : (
+                              <Paperclip className="w-4 h-4 text-cyan-400 shrink-0" />
+                            )}
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-semibold truncate max-w-[220px] sm:max-w-[300px]">
+                                {message.attachedDocument.name}
+                              </span>
+                              <span className="text-[10px] opacity-75">
+                                {message.attachedDocument.type.toUpperCase()}
+                                {message.attachedDocument.pageCount
+                                  ? ` · ${message.attachedDocument.pageCount} ${
+                                      message.attachedDocument.type === 'epub' ? 'sections' : 'pages'
+                                    }`
+                                  : ''}
+                                {` · ${(message.attachedDocument.size / 1024).toFixed(0)} Ko`}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
                         <div
                           className={`p-3.5 rounded-2xl shadow-md whitespace-pre-wrap leading-relaxed ${
                             isUser
@@ -921,9 +1035,62 @@ export default function NovaClassicApp() {
           </div>
         </main>
 
-        {/* FOOTER : CHAMP DE SAISIE */}
+        {/* FOOTER : CHAMP DE SAISIE AVEC BOUTON + FICHIER */}
         <footer className="p-3 sm:p-4 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-xl z-20 safe-bottom">
-          <div className="max-w-4xl mx-auto w-full">
+          <div className="max-w-4xl mx-auto w-full space-y-2">
+            {/* Input fichier caché pour ePub, PDF, TXT, MD */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".epub,.pdf,.txt,.md,text/plain,application/pdf,application/epub+zip"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            {/* Bannière de chargement du document en cours de traitement */}
+            {isReadingDoc && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0 text-cyan-400" />
+                <span>Lecture et extraction du contenu du document en cours...</span>
+              </div>
+            )}
+
+            {/* Aperçu du document attaché prêt à être envoyé */}
+            {attachedDoc && !isReadingDoc && (
+              <div className="flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-cyan-500/40 text-xs shadow-md animate-fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  {attachedDoc.type === 'epub' ? (
+                    <BookOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                  ) : attachedDoc.type === 'pdf' ? (
+                    <FileText className="w-4 h-4 text-rose-400 shrink-0" />
+                  ) : (
+                    <Paperclip className="w-4 h-4 text-cyan-400 shrink-0" />
+                  )}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-slate-100 truncate max-w-[200px] sm:max-w-sm">
+                      {attachedDoc.name}
+                    </span>
+                    <span className="text-[10px] text-cyan-300/80 font-mono shrink-0">
+                      ({attachedDoc.type.toUpperCase()}
+                      {attachedDoc.pageCount
+                        ? ` · ${attachedDoc.pageCount} ${attachedDoc.type === 'epub' ? 'chapitres' : 'pages'}`
+                        : ''}
+                      {` · ${(attachedDoc.size / 1024).toFixed(0)} Ko`})
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAttachedDoc(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 transition"
+                  title="Retirer ce fichier"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -931,6 +1098,17 @@ export default function NovaClassicApp() {
               }}
               className="flex items-center gap-2"
             >
+              {/* Bouton '+' d'envoi de fichier (ePub, PDF, TXT) */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isReadingDoc}
+                className="h-12 w-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 hover:border-cyan-500/50 text-slate-200 hover:text-cyan-300 transition-all duration-200 flex items-center justify-center flex-shrink-0 relative shadow-md active:scale-95 disabled:opacity-40"
+                title="Envoyer un livre ePUB ou un document PDF au compagnon"
+              >
+                <Plus className="w-5 h-5 text-cyan-400" />
+              </button>
+
               {/* Bouton Microphone */}
               <button
                 type="button"
@@ -952,8 +1130,12 @@ export default function NovaClassicApp() {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={
-                    isRecording
+                    isReadingDoc
+                      ? 'Lecture du fichier...'
+                      : isRecording
                       ? 'Écoute en cours...'
+                      : attachedDoc
+                      ? `Demander une analyse de ${attachedDoc.name}...`
                       : `Message pour ${profile.name}...`
                   }
                   className="w-full h-12 px-4 bg-slate-950/90 border border-slate-700/80 rounded-2xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 text-sm text-white placeholder-slate-500 transition shadow-inner font-sans"
@@ -963,7 +1145,7 @@ export default function NovaClassicApp() {
               {/* Bouton Envoyer */}
               <button
                 type="submit"
-                disabled={!inputText.trim() || isLoading}
+                disabled={(!inputText.trim() && !attachedDoc) || isLoading || isReadingDoc}
                 className="h-12 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-40 disabled:hover:from-cyan-600 disabled:hover:to-indigo-600 text-white font-semibold transition shadow-lg shadow-cyan-600/25 flex items-center justify-center gap-1.5 flex-shrink-0 active:scale-95"
                 title="Envoyer le message"
               >

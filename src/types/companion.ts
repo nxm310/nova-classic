@@ -43,12 +43,21 @@ export interface MemoryItem {
   timestamp: number;
 }
 
+export interface AttachedDocumentMeta {
+  name: string;
+  size: number;
+  type: 'pdf' | 'epub' | 'text';
+  pageCount?: number;
+  charCount: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
   audioUrl?: string;
+  attachedDocument?: AttachedDocumentMeta;
 }
 
 export interface ChatApiRequest {
