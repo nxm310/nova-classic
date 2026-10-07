@@ -1,11 +1,51 @@
-// Gestionnaire Audio & Voix pour Ami PWA
+// Gestionnaire Audio & Voix pour Nova Classic (Optimisé iOS Safari & Multiplateforme)
 import { cleanTextForSpeech } from './speechUtils';
 
 let currentAudio: HTMLAudioElement | null = null;
+let sharedAudioContext: AudioContext | null = null;
+let isAudioUnlocked = false;
 
-let audioContext: AudioContext | null = null;
+/**
+ * Déverrouille l'audio sur iOS Safari et navigateurs mobiles lors d'une interaction utilisateur (clic / tap).
+ * Joue un micro-buffer silencieux pour autoriser la lecture asynchrone ultérieure sans blocage de l'autoplay.
+ */
+export const unlockAudioContext = async (): Promise<AudioContext | null> => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtxClass) return null;
+
+    if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+      sharedAudioContext = new AudioCtxClass();
+    }
+
+    if (sharedAudioContext.state === 'suspended') {
+      await sharedAudioContext.resume();
+    }
+
+    if (!isAudioUnlocked && sharedAudioContext.state === 'running') {
+      // Micro-buffer silencieux (0.01 sec)
+      const buffer = sharedAudioContext.createBuffer(1, 1, 22050);
+      const source = sharedAudioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(sharedAudioContext.destination);
+      source.start(0);
+      isAudioUnlocked = true;
+    }
+
+    return sharedAudioContext;
+  } catch (err) {
+    console.warn('[Audio] Échec du déverrouillage audio context:', err);
+    return null;
+  }
+};
 
 export const audioManager = {
+  unlock(): Promise<AudioContext | null> {
+    return unlockAudioContext();
+  },
+
   playAudioStream(
     src: string,
     onStart?: () => void,
@@ -15,91 +55,138 @@ export const audioManager = {
   ): HTMLAudioElement {
     this.stopAll();
 
-    const audio = new Audio(src);
-    currentAudio = audio;
+    // Déverrouillage préventif immédiat
+    unlockAudioContext().catch(() => {});
+
+    const audio = new Audio();
+    // Attributs cruciaux pour iOS Safari :
+    // playsInline empêche le plein écran natif d'iOS et permet de garder le contrôle du son
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
+    (audio as any).playsInline = true;
+    audio.preload = 'auto';
+    audio.src = src;
     audio.playbackRate = 1.0;
     audio.defaultPlaybackRate = 1.0;
 
-    // Appliquer le filtre robotique via Web Audio API si demandé
-    if (options?.robotEffect && typeof window !== 'undefined') {
+    currentAudio = audio;
+
+    let cleanupDone = false;
+    const cleanup = () => {
+      if (cleanupDone) return;
+      cleanupDone = true;
+      if (currentAudio === audio) {
+        currentAudio = null;
+      }
+    };
+
+    // Appliquer le filtre robotique ou boost audio via Web Audio API si disponible
+    if (typeof window !== 'undefined') {
       try {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
-          if (!audioContext || audioContext.state === 'closed') {
-            audioContext = new AudioCtxClass();
+          if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+            sharedAudioContext = new AudioCtxClass();
           }
-          if (audioContext.state === 'suspended') {
-            audioContext.resume();
+          if (sharedAudioContext.state === 'suspended') {
+            sharedAudioContext.resume();
           }
 
-          const source = audioContext.createMediaElementSource(audio);
+          if (sharedAudioContext.state === 'running') {
+            const source = sharedAudioContext.createMediaElementSource(audio);
 
-          // 1. Coupe-bas pour donner un son de transmetteur / synthétiseur net
-          const hp = audioContext.createBiquadFilter();
-          hp.type = 'highpass';
-          hp.frequency.value = 350;
+            // Nœud de gain de sortie (léger boost pour compenser la faiblesse des HP mobiles)
+            const mainGain = sharedAudioContext.createGain();
+            mainGain.gain.value = 1.35;
 
-          // 2. Filtre résonant métallique (effet coque / robotique)
-          const peak = audioContext.createBiquadFilter();
-          peak.type = 'peaking';
-          peak.frequency.value = 2400;
-          peak.Q.value = 5.5;
-          peak.gain.value = 9.0;
+            if (options?.robotEffect) {
+              // 1. Coupe-bas pour donner un son de transmetteur net
+              const hp = sharedAudioContext.createBiquadFilter();
+              hp.type = 'highpass';
+              hp.frequency.value = 350;
 
-          // 3. Peigne de délai court (7ms) pour la résonance vocoder
-          const delay = audioContext.createDelay();
-          delay.delayTime.value = 0.007;
+              // 2. Filtre résonant métallique (coque / robotique)
+              const peak = sharedAudioContext.createBiquadFilter();
+              peak.type = 'peaking';
+              peak.frequency.value = 2400;
+              peak.Q.value = 5.5;
+              peak.gain.value = 9.0;
 
-          const feedback = audioContext.createGain();
-          feedback.gain.value = 0.6;
+              // 3. Peigne de délai court (7ms) pour la résonance vocoder
+              const delay = sharedAudioContext.createDelay();
+              delay.delayTime.value = 0.007;
 
-          const wetGain = audioContext.createGain();
-          wetGain.gain.value = 0.55;
+              const feedback = sharedAudioContext.createGain();
+              feedback.gain.value = 0.6;
 
-          const dryGain = audioContext.createGain();
-          dryGain.gain.value = 0.7;
+              const wetGain = sharedAudioContext.createGain();
+              wetGain.gain.value = 0.55;
 
-          // Chaînage
-          delay.connect(feedback);
-          feedback.connect(delay);
-          delay.connect(wetGain);
+              const dryGain = sharedAudioContext.createGain();
+              dryGain.gain.value = 0.7;
 
-          source.connect(hp);
-          hp.connect(peak);
+              // Chaînage
+              delay.connect(feedback);
+              feedback.connect(delay);
+              delay.connect(wetGain);
 
-          peak.connect(dryGain);
-          peak.connect(delay);
+              source.connect(hp);
+              hp.connect(peak);
 
-          dryGain.connect(audioContext.destination);
-          wetGain.connect(audioContext.destination);
+              peak.connect(dryGain);
+              peak.connect(delay);
+
+              dryGain.connect(mainGain);
+              wetGain.connect(mainGain);
+            } else {
+              // Lecture normale avec amplification claire
+              source.connect(mainGain);
+            }
+
+            mainGain.connect(sharedAudioContext.destination);
+          }
         }
       } catch (err) {
-        console.warn('Filtre robotique Web Audio non supporté, lecture normale:', err);
+        // Certains navigateurs peuvent refuser createMediaElementSource sur audio réutilisé
+        console.warn('[Audio] Routage Web Audio standardisé (fallback direct):', err);
       }
     }
 
-    if (onStart) audio.onplay = () => onStart();
-    if (onEnd) audio.onended = () => {
-      currentAudio = null;
-      onEnd();
+    if (onStart) {
+      audio.onplay = () => onStart();
+    }
+    audio.onended = () => {
+      cleanup();
+      if (onEnd) onEnd();
     };
-    if (onError) audio.onerror = (e) => {
-      currentAudio = null;
-      onError(e);
+    audio.onerror = (e) => {
+      cleanup();
+      if (onError) onError(e);
     };
 
-    audio.play().catch((err) => {
-      console.warn('Lecture audio bloquée ou échouée:', err);
-      if (onError) onError(err);
-    });
+    // Lecture protégée pour iOS Safari
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[Audio] Lecture audio bloquée (autoplay iOS ou erreur réseau):', err);
+        cleanup();
+        if (onError) onError(err);
+      });
+    }
 
     return audio;
   },
 
   stopAll(): void {
     if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.src = '';
+      try {
+        currentAudio.pause();
+        currentAudio.onplay = null;
+        currentAudio.onended = null;
+        currentAudio.onerror = null;
+        currentAudio.src = '';
+        currentAudio.load();
+      } catch {}
       currentAudio = null;
     }
   },
@@ -121,14 +208,27 @@ export const audioManager = {
     recognition.lang = 'fr-FR';
     recognition.continuous = false;
     recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    let hasResult = false;
 
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      onResult(transcript);
+      try {
+        const transcript = event.results?.[0]?.[0]?.transcript || '';
+        if (transcript) {
+          hasResult = true;
+          onResult(transcript);
+        }
+      } catch (e) {
+        console.warn('[Speech] Erreur parsing transcription:', e);
+      }
     };
 
     recognition.onerror = (event: any) => {
-      onError(event.error);
+      // Ignorer l'erreur non-bloquante 'no-speech' fréquente sur iOS quand l'utilisateur ne parle pas tout de suite
+      if (event.error !== 'no-speech') {
+        onError(event.error);
+      }
     };
 
     recognition.onend = () => {
@@ -158,6 +258,7 @@ export const audioManager = {
 
     let recognition: any = null;
     let silenceTimer: any = null;
+    let restartTimer: any = null;
     let accumulatedText = '';
     let isRunning = false;
     let shouldKeepRunning = false;
@@ -170,6 +271,13 @@ export const audioManager = {
       }
     };
 
+    const clearRestartTimer = () => {
+      if (restartTimer) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+      }
+    };
+
     const triggerSilenceSend = () => {
       clearTimer();
       const textToSend = accumulatedText.trim();
@@ -179,60 +287,87 @@ export const audioManager = {
       }
     };
 
-    const initRecognition = () => {
+    const cleanupInstance = () => {
       if (recognition) {
         try {
+          recognition.onresult = null;
+          recognition.onerror = null;
+          recognition.onend = null;
           recognition.abort();
         } catch {}
+        recognition = null;
       }
+    };
 
-      recognition = new SpeechRecognition();
-      recognition.lang = 'fr-FR';
-      recognition.continuous = true;
-      recognition.interimResults = true;
+    const initRecognition = () => {
+      cleanupInstance();
 
-      recognition.onresult = (event: any) => {
-        let currentInterim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const res = event.results[i];
-          if (res.isFinal) {
-            accumulatedText += ' ' + res[0].transcript;
-          } else {
-            currentInterim += res[0].transcript;
-          }
-        }
+      try {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'fr-FR';
+        // Sur iOS Safari, continuous = true peut causer des blocages matériels de flux.
+        // On active le mode continu mais avec gestion de redémarrage propre en cas de fin spontanée.
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
 
-        const currentFull = (accumulatedText + ' ' + currentInterim).trim();
-        if (currentFull) {
-          options.onInterim(currentFull);
-
-          // Réinitialiser le décompte de silence
-          clearTimer();
-          silenceTimer = setTimeout(() => {
-            triggerSilenceSend();
-          }, silenceDelay);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error !== 'no-speech') {
-          options.onError(event.error);
-        }
-      };
-
-      recognition.onend = () => {
-        isRunning = false;
-        if (shouldKeepRunning) {
-          setTimeout(() => {
-            if (shouldKeepRunning && !isRunning) {
-              try {
-                recognition.start();
-                isRunning = true;
-              } catch {}
+        recognition.onresult = (event: any) => {
+          let currentInterim = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const res = event.results[i];
+            if (res.isFinal) {
+              accumulatedText += ' ' + res[0].transcript;
+            } else {
+              currentInterim += res[0].transcript;
             }
-          }, 200);
-        }
-      };
+          }
+
+          const currentFull = (accumulatedText + ' ' + currentInterim).trim();
+          if (currentFull) {
+            options.onInterim(currentFull);
+
+            // Réinitialiser le décompte de silence
+            clearTimer();
+            silenceTimer = setTimeout(() => {
+              triggerSilenceSend();
+            }, silenceDelay);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          if (event.error === 'no-speech') {
+            // Silence normal sur iOS, rien à signaler
+            return;
+          }
+          if (event.error === 'aborted') {
+            // Arrêt intentionnel ou redémarrage
+            return;
+          }
+          console.warn('[Mode Appel Continuous] Erreur recognition:', event.error);
+          options.onError(event.error);
+        };
+
+        recognition.onend = () => {
+          isRunning = false;
+          // Si on doit continuer à écouter (ex: iOS coupe au bout de 8 à 10s de pause), on relance
+          if (shouldKeepRunning) {
+            clearRestartTimer();
+            restartTimer = setTimeout(() => {
+              if (shouldKeepRunning && !isRunning) {
+                try {
+                  initRecognition();
+                  recognition.start();
+                  isRunning = true;
+                } catch (e) {
+                  console.warn('[Mode Appel Continuous] Échec relance auto:', e);
+                }
+              }
+            }, 250);
+          }
+        };
+      } catch (err) {
+        console.warn('[Mode Appel Continuous] Erreur initialisation:', err);
+      }
     };
 
     return {
@@ -240,17 +375,21 @@ export const audioManager = {
         shouldKeepRunning = true;
         accumulatedText = '';
         clearTimer();
+        clearRestartTimer();
         initRecognition();
         try {
-          recognition.start();
-          isRunning = true;
+          if (recognition) {
+            recognition.start();
+            isRunning = true;
+          }
         } catch (e) {
-          console.warn('Recognition start error:', e);
+          console.warn('[Mode Appel] Recognition start error:', e);
         }
       },
       pause: () => {
         shouldKeepRunning = false;
         clearTimer();
+        clearRestartTimer();
         if (recognition && isRunning) {
           try {
             recognition.stop();
@@ -261,12 +400,9 @@ export const audioManager = {
       stop: () => {
         shouldKeepRunning = false;
         clearTimer();
+        clearRestartTimer();
         accumulatedText = '';
-        if (recognition) {
-          try {
-            recognition.abort();
-          } catch {}
-        }
+        cleanupInstance();
         isRunning = false;
       },
     };

@@ -586,7 +586,7 @@ function writeString(view: DataView, offset: number, string: string) {
   }
 }
 
-function pcmToWavBlob(pcmData: Uint8Array, sampleRate = 24000, numChannels = 1): Blob {
+function pcmToWavBlob(pcmData: Uint8Array, sampleRate = 24000, numChannels = 1, gainMultiplier = 1.35): Blob {
   const byteRate = sampleRate * numChannels * 2;
   const blockAlign = numChannels * 2;
   const buffer = new ArrayBuffer(44 + pcmData.length);
@@ -611,7 +611,21 @@ function pcmToWavBlob(pcmData: Uint8Array, sampleRate = 24000, numChannels = 1):
   writeString(view, 36, 'data');
   view.setUint32(40, pcmData.length, true);
 
-  new Uint8Array(buffer, 44).set(pcmData);
+  // Application du gain sur les échantillons PCM 16-bit (Little-Endian)
+  // pour assurer un volume clair et puissant sur haut-parleurs mobiles/iPhone
+  const targetView = new DataView(buffer, 44);
+  const sourceView = new DataView(pcmData.buffer, pcmData.byteOffset, pcmData.byteLength);
+  const sampleCount = Math.floor(pcmData.byteLength / 2);
+
+  if (gainMultiplier !== 1.0) {
+    for (let i = 0; i < sampleCount; i++) {
+      const sample = sourceView.getInt16(i * 2, true);
+      const boosted = Math.max(-32768, Math.min(32767, Math.round(sample * gainMultiplier)));
+      targetView.setInt16(i * 2, boosted, true);
+    }
+  } else {
+    new Uint8Array(buffer, 44).set(pcmData);
+  }
 
   return new Blob([buffer], { type: 'audio/wav' });
 }

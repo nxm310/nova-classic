@@ -4,6 +4,20 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.0.1] — 2026-10-07
+
+### 📱 Optimisations iOS Safari & Mobile (Son & Micro)
+* **Amplification & Égalisation Dynamique Mobile** :
+  * Amplification directe du flux audio PCM 16-bit et préamplification via `GainNode` Web Audio pour garantir un volume sonore net et puissant sur haut-parleur d'iPhone.
+  * Attributs `playsinline` et `webkit-playsinline` intégrés au flux HTML5 Audio pour éliminer les interruptions matérielles.
+* **Déverrouillage Audio Mobile (Audio Context Unlocker)** :
+  * Déverrouillage automatique du canal audio dès la première interaction tactile (Micro, Envoi de message, Appel DirectLive) pour contourner les restrictions strictes d'AutoPlay sur iOS Safari.
+* **Résilience du Microphone & Mode Appel Continu** :
+  * Gestion du basculement matériel audio/micro avec temporisation protectrice de réarmement (150ms) pour éviter que Safari ne bloque l'accès au microphone après la parole de l'IA.
+  * Filtrage des erreurs d'inactivité bénignes d'iOS (`no-speech`, `aborted`) avec reconnexion automatique transparente.
+
+---
+
 ## [v1.0.0] — 2026-10-07
 
 ### 🚀 Lancement Initial de Nova Classic

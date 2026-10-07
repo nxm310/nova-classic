@@ -246,6 +246,9 @@ export default function NovaClassicApp() {
     const text = (textToSend || inputText).trim();
     if (!text || isLoading) return;
 
+    // Déverrouiller le canal audio sur l'interaction utilisateur (crucial pour iOS Safari)
+    audioManager.unlock().catch(() => {});
+
     if (!textToSend) setInputText('');
 
     const userMessage: ChatMessage = {
@@ -314,7 +317,10 @@ export default function NovaClassicApp() {
   };
 
   // --- Dictée Vocale Simple (Microphone) ---
-  const toggleVoiceRecording = () => {
+  const toggleVoiceRecording = async () => {
+    // Déverrouiller immédiatement le pipeline audio sur le tap utilisateur (requis iOS)
+    audioManager.unlock().catch(() => {});
+
     if (isRecording) {
       recognitionRef.current?.stop();
       setIsRecording(false);
@@ -324,6 +330,9 @@ export default function NovaClassicApp() {
     audioManager.stopAll();
     setIsPlayingAudio(false);
     setPlayingMessageId(null);
+
+    // Léger délai pour s'assurer que le matériel audio est bien libéré par tout élément audio en cours
+    await new Promise((r) => setTimeout(r, 60));
 
     const rec = audioManager.createSpeechRecognition(
       (transcript) => {
@@ -343,8 +352,13 @@ export default function NovaClassicApp() {
 
     if (rec) {
       recognitionRef.current = rec;
-      rec.start();
-      setIsRecording(true);
+      try {
+        rec.start();
+        setIsRecording(true);
+      } catch (e) {
+        console.warn('Échec démarrage dictée vocale:', e);
+        setIsRecording(false);
+      }
     } else {
       alert("La reconnaissance vocale n'est pas supportée sur ce navigateur.");
     }
@@ -352,6 +366,9 @@ export default function NovaClassicApp() {
 
   // --- Mode Appel Mains-Libres Continu (DirectLive) ---
   const startHandsFreeCall = () => {
+    // Déverrouiller le contexte audio dès le tap (crucial pour iOS)
+    audioManager.unlock().catch(() => {});
+
     setIsCallModalOpen(true);
     isCallActiveRef.current = true;
     setCallState('listening');
@@ -467,12 +484,21 @@ export default function NovaClassicApp() {
           playSpeech(speechText, botMessage.id, () => {
             if (isCallActiveRef.current) {
               setCallState('listening');
-              continuousRecognizerRef.current?.start();
+              // Laisser 150ms à iOS pour libérer le hardware audio avant de relancer le micro
+              setTimeout(() => {
+                if (isCallActiveRef.current) {
+                  continuousRecognizerRef.current?.start();
+                }
+              }, 150);
             }
           });
         } else {
           setCallState('listening');
-          continuousRecognizerRef.current?.start();
+          setTimeout(() => {
+            if (isCallActiveRef.current) {
+              continuousRecognizerRef.current?.start();
+            }
+          }, 100);
         }
       } else {
         setCallState('listening');
@@ -482,7 +508,11 @@ export default function NovaClassicApp() {
       console.error('Erreur live call:', err);
       if (isCallActiveRef.current) {
         setCallState('listening');
-        continuousRecognizerRef.current?.start();
+        setTimeout(() => {
+          if (isCallActiveRef.current) {
+            continuousRecognizerRef.current?.start();
+          }
+        }, 150);
       }
     }
   };
