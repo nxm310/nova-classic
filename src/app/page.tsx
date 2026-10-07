@@ -13,6 +13,7 @@ import { cleanTextForSpeech } from '@/lib/speechUtils';
 import { SettingsModal } from '@/components/SettingsModal';
 import { AudioVisualizer } from '@/components/AudioVisualizer';
 import { ConversationModal, LiveCallState } from '@/components/ConversationModal';
+import { ChangelogModal } from '@/components/ChangelogModal';
 import { TelemetryWidget } from '@/components/TelemetryWidget';
 import { visionManager } from '@/lib/vision';
 import { geminiClient } from '@/lib/geminiClient';
@@ -59,6 +60,9 @@ export default function NovaClassicApp() {
 
   // Vision écran et flux d'analyse
   const [isVisionActive, setIsVisionActive] = useState(false);
+
+  // États du Pop-up Nouveautés & Version (Changelog)
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
 
   // États de la Mise à Jour GitHub
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -127,6 +131,18 @@ export default function NovaClassicApp() {
     setMessages(loadedMessages);
     messagesRef.current = loadedMessages;
     setMemories(loadedMemories);
+
+    // Vérification de la version vue pour afficher le pop-up Quoi de neuf automatiquement
+    if (typeof window !== 'undefined') {
+      const lastSeenVersion = localStorage.getItem('nova_classic_last_seen_version');
+      if (lastSeenVersion !== APP_VERSION) {
+        const timer = setTimeout(() => {
+          setIsChangelogOpen(true);
+          localStorage.setItem('nova_classic_last_seen_version', APP_VERSION);
+        }, 700);
+        return () => clearTimeout(timer);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -556,15 +572,15 @@ export default function NovaClassicApp() {
                 <span className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 font-medium border border-cyan-500/20 uppercase tracking-wider">
                   {currentPreset?.name.split('&')[0].trim() || 'Compagnon'}
                 </span>
-                {/* Synchronisation de version */}
+                {/* Bouton Nouveautés / Changelog */}
                 <button
                   type="button"
-                  onClick={handleCheckUpdate}
+                  onClick={() => setIsChangelogOpen(true)}
                   className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-300 font-bold transition active:scale-95 group cursor-pointer"
-                  title="Vérifier la version de Nova Classic"
+                  title="Voir les nouveautés de Nova Classic"
                 >
+                  <Sparkles className="w-2.5 h-2.5 text-cyan-400 group-hover:scale-110 transition-transform" />
                   <span>v{APP_VERSION}</span>
-                  <RefreshCw className={`w-2.5 h-2.5 text-cyan-400 group-hover:rotate-180 transition-transform duration-500 ${updateChecking ? 'animate-spin text-cyan-200' : ''}`} />
                 </button>
               </div>
             </div>
@@ -985,6 +1001,14 @@ export default function NovaClassicApp() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         isMuted={isCallMuted}
         onToggleMute={handleToggleCallMute}
+      />
+
+      {/* MODAL NOUVEAUTÉS / CHANGELOG */}
+      <ChangelogModal
+        isOpen={isChangelogOpen}
+        onClose={() => setIsChangelogOpen(false)}
+        onCheckUpdate={handleCheckUpdate}
+        isCheckingUpdate={updateChecking}
       />
 
       {/* MODAL MISE À JOUR GITHUB */}
