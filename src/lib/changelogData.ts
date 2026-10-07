@@ -12,9 +12,32 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
   {
-    version: '1.0.2',
+    version: '1.0.3',
     date: '07 Octobre 2026',
     isLatest: true,
+    title: 'Déblocage Voix Asynchrone & Libération Matérielle iOS',
+    highlights: [
+      {
+        category: '🔓 Amorçage Audio Persistant (iOS Safari)',
+        description:
+          "Pré-amorçage direct de l'élément HTMLAudio dès l'appui sur 'Appel Direct'. Cela contourne le blocage strict d'Autoplay d'iOS Safari qui rendait la réponse vocale muette après le temps de calcul de l'IA.",
+      },
+      {
+        category: '🎙️ Libération Immédiate du Micro (abort)',
+        description:
+          "Arrêt forcé et immédiat du microphone dès la détection du silence de l'utilisateur (recognition.abort()), restituant instantanément à iOS le plein contrôle du haut-parleur principal pour la voix de Nova.",
+      },
+      {
+        category: '🔊 Canal Média Haute Priorité',
+        description:
+          "Rétablissement strict et forcé de la session multimédia standard (musique/vidéo) à chaque réponse pour garantir la lecture à plein volume.",
+      },
+    ],
+  },
+  {
+    version: '1.0.2',
+    date: '07 Octobre 2026',
+    isLatest: false,
     title: 'Canal Média Standard & Sortie Haut-Parleur (iOS)',
     highlights: [
       {

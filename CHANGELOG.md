@@ -4,6 +4,19 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.0.3] — 2026-10-07
+
+### ⚡ Déblocage Voix Asynchrone & Libération Matérielle (iOS Safari)
+* **Amorçage Audio Persistant (Autoplay Bypass iOS)** :
+  * Pré-amorçage (`primeAudioElement()`) d'un élément `<audio>` natif dès le tap initial sur "Appel Direct".
+  * Safari conserve l'autorisation de lecture accordée lors du clic utilisateur, permettant au son généré après la requête réseau asynchrone (1-3s) de se déclencher sans être bloqué par la politique d'autoplay mobile.
+* **Libération Immédiate du Microphone (`recognition.abort()`)** :
+  * Dès la fin de la prise de parole de l'utilisateur, interruption matérielle immédiate du micro pour restituer le canal audio au haut-parleur principal sans conflit duplex.
+* **Sécurisation de la Session Média Multimédia** :
+  * Réaffirmation du profil `playback` à chaque tour de parole garantissant l'utilisation de la barre de volume multimédia standard.
+
+---
+
 ## [v1.0.2] — 2026-10-07
 
 ### 🔊 Routage Multimédia & Forçage Haut-Parleur (iOS)

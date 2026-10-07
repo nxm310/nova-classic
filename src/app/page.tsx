@@ -243,7 +243,8 @@ export default function NovaClassicApp() {
           setPlayingMessageId(null);
           if (onEndCallback) onEndCallback();
         },
-        () => {
+        (err) => {
+          console.warn('[Page] Erreur lecture audio stream:', err);
           setIsPlayingAudio(false);
           setPlayingMessageId(null);
           if (onEndCallback) onEndCallback();
@@ -251,7 +252,7 @@ export default function NovaClassicApp() {
         { robotEffect: profile.robotEffect }
       );
     } catch (err) {
-      console.warn('Erreur lors de la lecture audio:', err);
+      console.warn('Erreur lors de la génération/lecture audio:', err);
       setIsPlayingAudio(false);
       setPlayingMessageId(null);
       if (onEndCallback) onEndCallback();
@@ -384,6 +385,13 @@ export default function NovaClassicApp() {
   const startHandsFreeCall = () => {
     // Déverrouiller le contexte audio dès le tap (crucial pour iOS)
     audioManager.unlock().catch(() => {});
+
+    // S'assurer que le mode muet n'est pas activé par défaut au démarrage d'un appel
+    setIsCallMuted(false);
+    isCallMutedRef.current = false;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nova_classic_call_muted', 'false');
+    }
 
     setIsCallModalOpen(true);
     isCallActiveRef.current = true;

@@ -4,6 +4,10 @@ import { cleanTextForSpeech } from './speechUtils';
 let currentAudio: HTMLAudioElement | null = null;
 let sharedAudioContext: AudioContext | null = null;
 let isAudioUnlocked = false;
+let primedAudioElement: HTMLAudioElement | null = null;
+
+// Audio silencieux encodé en base64 (format WAV 44 bytes valide ultra-court)
+const SILENT_WAV_BASE64 = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAP//';
 
 /**
  * Configure la session audio iOS en mode "playback" (multimédia / musique)
@@ -24,6 +28,45 @@ export const enforceMediaAudioSession = () => {
 };
 
 /**
+ * Crée ou amorce l'élément audio HTML pré-déverrouillé pour iOS Safari.
+ * En jouant un son silencieux direct sur un geste utilisateur (clic / tap),
+ * Safari accorde à cet élément l'autorisation permanente de jouer des audios,
+ * même après des requêtes asynchrones réseau (fetch de l'IA).
+ */
+export const primeAudioElement = (): HTMLAudioElement | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    if (!primedAudioElement) {
+      const el = new Audio();
+      el.setAttribute('playsinline', 'true');
+      el.setAttribute('webkit-playsinline', 'true');
+      (el as any).playsInline = true;
+      el.preload = 'auto';
+      primedAudioElement = el;
+    }
+
+    // Amorcer avec un WAV silencieux
+    primedAudioElement.src = SILENT_WAV_BASE64;
+    const playPromise = primedAudioElement.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          if (primedAudioElement) {
+            primedAudioElement.pause();
+            primedAudioElement.currentTime = 0;
+          }
+        })
+        .catch(() => {});
+    }
+    return primedAudioElement;
+  } catch (err) {
+    console.warn('[Audio] Échec de l\'amorçage de l\'élément audio:', err);
+    return null;
+  }
+};
+
+/**
  * Déverrouille l'audio sur iOS Safari et navigateurs mobiles lors d'une interaction utilisateur (clic / tap).
  * Joue un micro-buffer silencieux pour autoriser la lecture asynchrone ultérieure sans blocage de l'autoplay,
  * et force le canal média standard.
@@ -32,6 +75,7 @@ export const unlockAudioContext = async (): Promise<AudioContext | null> => {
   if (typeof window === 'undefined') return null;
 
   enforceMediaAudioSession();
+  primeAudioElement();
 
   try {
     const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -64,6 +108,7 @@ export const unlockAudioContext = async (): Promise<AudioContext | null> => {
 
 export const audioManager = {
   unlock(): Promise<AudioContext | null> {
+    primeAudioElement();
     return unlockAudioContext();
   },
 
@@ -80,13 +125,19 @@ export const audioManager = {
     enforceMediaAudioSession();
     unlockAudioContext().catch(() => {});
 
-    const audio = new Audio();
-    // Attributs cruciaux pour iOS Safari :
-    // playsInline empêche le plein écran natif d'iOS et permet de garder le contrôle du son
-    audio.setAttribute('playsinline', 'true');
-    audio.setAttribute('webkit-playsinline', 'true');
-    (audio as any).playsInline = true;
-    audio.preload = 'auto';
+    // Réutiliser l'élément audio pré-amorcé (ou en créer un nouveau si non disponible)
+    let audio: HTMLAudioElement;
+    if (primedAudioElement) {
+      audio = primedAudioElement;
+    } else {
+      audio = new Audio();
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      (audio as any).playsInline = true;
+      audio.preload = 'auto';
+      primedAudioElement = audio;
+    }
+
     audio.src = src;
     audio.playbackRate = 1.0;
     audio.defaultPlaybackRate = 1.0;
@@ -109,8 +160,11 @@ export const audioManager = {
       }
     };
 
-    // Appliquer le filtre robotique ou boost audio via Web Audio API si disponible
-    if (typeof window !== 'undefined') {
+    // Sur iOS Safari, createMediaElementSource(audio) détourne le flux vers le sous-système Web Audio
+    // qui est soumis au mode Silencieux matériel et aux conflits de sessions micro.
+    // Pour une clarté et fiabilité maximale, on n'utilise createMediaElementSource QUE si l'effet robotique est activé.
+    // Sinon, l'élément HTMLAudioElement natif joue directement et sort sur le haut-parleur sans aucune perte !
+    if (options?.robotEffect && typeof window !== 'undefined') {
       try {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
@@ -124,60 +178,53 @@ export const audioManager = {
           if (sharedAudioContext.state === 'running') {
             const source = sharedAudioContext.createMediaElementSource(audio);
 
-            // Nœud de gain de sortie (léger boost pour compenser la faiblesse des HP mobiles)
             const mainGain = sharedAudioContext.createGain();
             mainGain.gain.value = 1.35;
 
-            if (options?.robotEffect) {
-              // 1. Coupe-bas pour donner un son de transmetteur net
-              const hp = sharedAudioContext.createBiquadFilter();
-              hp.type = 'highpass';
-              hp.frequency.value = 350;
+            // 1. Coupe-bas pour donner un son de transmetteur net
+            const hp = sharedAudioContext.createBiquadFilter();
+            hp.type = 'highpass';
+            hp.frequency.value = 350;
 
-              // 2. Filtre résonant métallique (coque / robotique)
-              const peak = sharedAudioContext.createBiquadFilter();
-              peak.type = 'peaking';
-              peak.frequency.value = 2400;
-              peak.Q.value = 5.5;
-              peak.gain.value = 9.0;
+            // 2. Filtre résonant métallique (coque / robotique)
+            const peak = sharedAudioContext.createBiquadFilter();
+            peak.type = 'peaking';
+            peak.frequency.value = 2400;
+            peak.Q.value = 5.5;
+            peak.gain.value = 9.0;
 
-              // 3. Peigne de délai court (7ms) pour la résonance vocoder
-              const delay = sharedAudioContext.createDelay();
-              delay.delayTime.value = 0.007;
+            // 3. Peigne de délai court (7ms) pour la résonance vocoder
+            const delay = sharedAudioContext.createDelay();
+            delay.delayTime.value = 0.007;
 
-              const feedback = sharedAudioContext.createGain();
-              feedback.gain.value = 0.6;
+            const feedback = sharedAudioContext.createGain();
+            feedback.gain.value = 0.6;
 
-              const wetGain = sharedAudioContext.createGain();
-              wetGain.gain.value = 0.55;
+            const wetGain = sharedAudioContext.createGain();
+            wetGain.gain.value = 0.55;
 
-              const dryGain = sharedAudioContext.createGain();
-              dryGain.gain.value = 0.7;
+            const dryGain = sharedAudioContext.createGain();
+            dryGain.gain.value = 0.7;
 
-              // Chaînage
-              delay.connect(feedback);
-              feedback.connect(delay);
-              delay.connect(wetGain);
+            // Chaînage
+            delay.connect(feedback);
+            feedback.connect(delay);
+            delay.connect(wetGain);
 
-              source.connect(hp);
-              hp.connect(peak);
+            source.connect(hp);
+            hp.connect(peak);
 
-              peak.connect(dryGain);
-              peak.connect(delay);
+            peak.connect(dryGain);
+            peak.connect(delay);
 
-              dryGain.connect(mainGain);
-              wetGain.connect(mainGain);
-            } else {
-              // Lecture normale avec amplification claire
-              source.connect(mainGain);
-            }
+            dryGain.connect(mainGain);
+            wetGain.connect(mainGain);
 
             mainGain.connect(sharedAudioContext.destination);
           }
         }
       } catch (err) {
-        // Certains navigateurs peuvent refuser createMediaElementSource sur audio réutilisé
-        console.warn('[Audio] Routage Web Audio standardisé (fallback direct):', err);
+        console.warn('[Audio] Filtre robotique non appliqué (fallback natif):', err);
       }
     }
 
@@ -421,11 +468,15 @@ export const audioManager = {
         clearRestartTimer();
         if (recognition && isRunning) {
           try {
-            recognition.stop();
-          } catch {}
+            recognition.abort();
+          } catch {
+            try {
+              recognition.stop();
+            } catch {}
+          }
         }
         isRunning = false;
-        // Rétablir immédiatement le canal média standard
+        // Rétablir immédiatement le canal média standard (sortie haut-parleur musique/média)
         enforceMediaAudioSession();
       },
       stop: () => {
