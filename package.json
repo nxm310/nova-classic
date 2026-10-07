@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true})\" && next dev",
     "build": "next build",
+    "deploy": "next build && cd out && git init -b gh-pages && git add . && git commit -m \"deploy: update gh-pages static export\" && git remote add origin https://github.com/nxm310/nova-classic.git && git push -u origin gh-pages --force && rm -rf .git && cd ..",
     "start": "next start",
     "lint": "next lint"
   },
