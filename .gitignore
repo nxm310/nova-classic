@@ -1,6 +1,7 @@
 # Next.js
 .next/
 out/
+.github/
 
 # Dependencies
 node_modules/
