@@ -33,7 +33,7 @@ export const geminiClient = {
 
     const lengthConfig: Record<
       string,
-      { sectionPrompt: string; maxTokens: number; temperature: number }
+      { sectionPrompt: string; maxTokens: number }
     > = {
       ultra_concise: {
         sectionPrompt: `[DIRECTIVE PRIORITAIRE ABSOLUE : MODE ULTRA-COURT (COMBAT / ACTION)]
@@ -47,7 +47,6 @@ Exemples stricts de réponses attendues en mode ultra-court :
 • "Boucliers réactivés à pleine puissance. [ACTION:KEY:o]"
 • "Moteur quantique calibré et paré au saut. [ACTION:KEY:b]"`,
         maxTokens: 350,
-        temperature: 0.35,
       },
       short: {
         sectionPrompt: `[DIRECTIVE PRIORITAIRE ABSOLUE : MODE COURT (RECOMMANDÉ)]
@@ -59,7 +58,6 @@ Exemples de réponses attendues en mode court :
 • "Train rentré et phares coupés, Commandant. Tous les voyants sont au vert. [ACTION:KEY:n] [ACTION:KEY:l]"
 • "Demande d'atterrissage transmise à la station. Le couloir nous est assigné. [ACTION:KEY:alt+n]"`,
         maxTokens: 650,
-        temperature: 0.5,
       },
       balanced: {
         sectionPrompt: `[DIRECTIVE DE LONGUEUR : MODE ÉQUILIBRÉ (NATUREL & AMICAL)]
@@ -67,7 +65,6 @@ Exemples de réponses attendues en mode court :
 2. STYLE : Ton complice, agréable et précis. Donne une réponse complète et utile sans faire de monologue interminable.
 3. ACHÈVEMENT OBLIGATOIRE : Termine impérativement chacune de tes phrases par un point final (. ! ?). Ne t'arrête JAMAIS au milieu d'une pensée.`,
         maxTokens: 1200,
-        temperature: 0.7,
       },
       detailed: {
         sectionPrompt: `[DIRECTIVE DE LONGUEUR : MODE DÉTAILLÉ (EXHAUSTIF & PÉDAGOGIQUE)]
@@ -75,7 +72,6 @@ Exemples de réponses attendues en mode court :
 2. STYLE : Guide expert, pédagogue et exhaustif.
 3. ACHÈVEMENT OBLIGATOIRE : Termine impérativement chaque phrase et chaque paragraphe par sa ponctuation finale (. ! ?). Ne coupe jamais une phrase en cours.`,
         maxTokens: 2500,
-        temperature: 0.75,
       },
     };
 
@@ -131,16 +127,16 @@ ${memoriesText}
     const getModelCandidates = (quality?: string): string[] => {
       switch (quality) {
         case '3.8-flash-tts':
-          return ['gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-2.5-flash'];
+          return ['gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
         case '3.8-flash':
-          return ['gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+          return ['gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-flash-lite'];
         case 'high':
-          return ['gemini-2.5-pro', 'gemini-3.8-flash', 'gemini-2.5-flash'];
+          return ['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
         case '3.8-live':
-          return ['gemini-3.8-live', 'gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-2.5-flash'];
+          return ['gemini-3.8-live', 'gemini-3.8-flash-tts', 'gemini-3.8-flash'];
         case 'fast':
         default:
-          return ['gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+          return ['gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
       }
     };
 
@@ -169,12 +165,12 @@ ${memoriesText}
         },
         ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
         generationConfig: {
-          temperature: lengthSetting.temperature,
-          topP: 0.95,
           maxOutputTokens: lengthSetting.maxTokens,
-          // Désactiver le délai de réflexion/thinking pour une réponse immédiate en vol
+          // Remplacement conforme Google Gemini 2026 :
+          // thinkingLevel 'minimal' pour réponse conversationnelle instantanée
+          // (remplace thinking_budget déprécié, et supprime temperature, top_p, top_k)
           thinkingConfig: {
-            thinkingBudget: 0,
+            thinkingLevel: 'minimal',
           },
         },
       });
@@ -283,9 +279,6 @@ ${memoriesText}
       const candidateModels = [
         'gemini-3.8-flash-tts',
         'gemini-3.8-flash-lite-tts',
-        'gemini-2.5-flash-preview-tts',
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-exp',
       ];
 
       // Formats de payload supportés par Google Gemini :

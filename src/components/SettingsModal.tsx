@@ -862,7 +862,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     },
                     {
                       id: 'high' as const,
-                      title: '🧠 Gemini 2.5 Pro',
+                      title: '🧠 Gemini 3.1 Pro',
                       desc: 'Raisonnement approfondi et réponses très riches pour les questions complexes.',
                       badge: 'Haute Intelligence',
                     },

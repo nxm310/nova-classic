@@ -4,6 +4,19 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.1.1] — 2026-10-08
+
+### ⚡ Migration API Gemini 2026 : thinking_level & Paramètres Dépréciés
+* **Migration `thinking_level` (Résolution de la Dépréciation Google)** :
+  * Remplacement du paramètre `thinking_budget: 0` déprécié par `thinkingLevel: 'minimal'` dans `thinkingConfig`.
+  * Évite toute erreur `400 INVALID_ARGUMENT` sur les modèles Gemini 3 récents tout en garantissant des réponses conversationnelles ultra-rapides.
+* **Suppression des Paramètres d'Échantillonnage Dépréciés** :
+  * Retrait des options `temperature`, `top_p` et `top_k` qui sont désormais sans effet ou déclencheront des erreurs selon la note officielle de Google.
+* **Modernisation des Modèles** :
+  * Remplacement des anciens modèles résiduels de repli par `gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview` et `gemini-3.8-flash-tts`.
+
+---
+
 ## [v1.1.0] — 2026-10-07
 
 ### 📚 Lecture de Livres ePUB, Documents PDF & Fichiers Texte

@@ -12,9 +12,32 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: '1.1.1',
+    date: '08 Octobre 2026',
+    isLatest: true,
+    title: 'Migration API Gemini 2026 : thinking_level & Paramètres Dépréciés',
+    highlights: [
+      {
+        category: '⚡ Migration thinking_level (Recommandation Google)',
+        description:
+          "Remplacement du paramètre thinking_budget déprécié par thinkingLevel: 'minimal' pour garantir des temps de réponse instantanés sans erreur 400 sur la nouvelle génération Gemini 3.",
+      },
+      {
+        category: '🧹 Suppression des Paramètres d\'Échantillonnage Dépréciés',
+        description:
+          "Retrait des paramètres obsolètes temperature, top_p et top_k conformément à la directive officielle Google pour utiliser les paramètres optimaux par défaut des modèles récents.",
+      },
+      {
+        category: '🚀 Modèles Mis à Jour (Génération 3.x)',
+        description:
+          "Mise à niveau complète des chaînes de repli vers Gemini 3.8 Flash, Gemini 3.5 Flash-Lite, Gemini 3.1 Pro et Gemini 3.8 Flash TTS.",
+      },
+    ],
+  },
+  {
     version: '1.1.0',
     date: '07 Octobre 2026',
-    isLatest: true,
+    isLatest: false,
     title: 'Lecture de Livres ePUB, Documents PDF & Fichiers Texte',
     highlights: [
       {
