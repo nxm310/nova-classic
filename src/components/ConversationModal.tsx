@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { CompanionProfile } from '@/types/companion';
 import { TelemetryWidget } from '@/components/TelemetryWidget';
 import {
@@ -54,6 +54,17 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({
   const [inputText, setInputText] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -74,7 +85,11 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-4 sm:p-6 select-none animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-between p-4 sm:p-6 select-none animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+    >
       {/* BARRE SUPÉRIEURE (HEADER) */}
       <header className="w-full max-w-4xl flex items-center justify-between pb-3 border-b border-slate-800/80 shrink-0">
         <div className="flex items-center gap-3">

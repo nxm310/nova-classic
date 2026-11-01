@@ -300,7 +300,7 @@ export const audioManager = {
         sharedAudioContext = new AudioCtxClass();
       }
       if (sharedAudioContext.state === 'suspended') {
-        sharedAudioContext.resume();
+        sharedAudioContext.resume().catch(() => {});
       }
       const ctx = sharedAudioContext;
       const now = ctx.currentTime;
@@ -335,7 +335,7 @@ export const audioManager = {
         sharedAudioContext = new AudioCtxClass();
       }
       if (sharedAudioContext.state === 'suspended') {
-        sharedAudioContext.resume();
+        sharedAudioContext.resume().catch(() => {});
       }
       const ctx = sharedAudioContext;
       const now = ctx.currentTime;

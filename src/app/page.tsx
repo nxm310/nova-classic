@@ -71,6 +71,7 @@ export default function NovaClassicApp() {
 
   // États du Pop-up Nouveautés & Version (Changelog)
   const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  const [hasNewVersion, setHasNewVersion] = useState(false);
 
   // États de la Mise à Jour GitHub
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -129,15 +130,11 @@ export default function NovaClassicApp() {
     messagesRef.current = loadedMessages;
     setMemories(loadedMemories);
 
-    // Vérification de la version vue pour afficher le pop-up Quoi de neuf automatiquement
+    // Vérification discrète de version sans pop-up intrusif au démarrage
     if (typeof window !== 'undefined') {
       const lastSeenVersion = localStorage.getItem('nova_classic_last_seen_version');
       if (lastSeenVersion !== APP_VERSION) {
-        const timer = setTimeout(() => {
-          setIsChangelogOpen(true);
-          localStorage.setItem('nova_classic_last_seen_version', APP_VERSION);
-        }, 700);
-        return () => clearTimeout(timer);
+        setHasNewVersion(true);
       }
     }
   }, []);
@@ -694,12 +691,24 @@ ${promptText}`;
                 {/* Bouton Nouveautés / Changelog */}
                 <button
                   type="button"
-                  onClick={() => setIsChangelogOpen(true)}
-                  className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-300 font-bold transition active:scale-95 group cursor-pointer"
+                  onClick={() => {
+                    setIsChangelogOpen(true);
+                    setHasNewVersion(false);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('nova_classic_last_seen_version', APP_VERSION);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-300 font-bold transition active:scale-95 group cursor-pointer relative"
                   title="Voir les nouveautés de Nova Classic"
                 >
                   <Sparkles className="w-2.5 h-2.5 text-cyan-400 group-hover:scale-110 transition-transform" />
                   <span>v{APP_VERSION}</span>
+                  {hasNewVersion && (
+                    <span className="flex h-1.5 w-1.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400"></span>
+                    </span>
+                  )}
                 </button>
               </div>
             </div>

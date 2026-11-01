@@ -12,9 +12,36 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
   {
-    version: '1.2.0',
+    version: '1.2.1',
     date: '01 Novembre 2026',
     isLatest: true,
+    title: 'Ergonomie & Accessibilité : Démarrage Instantané et Badge Non-Intrusif',
+    highlights: [
+      {
+        category: '🔓 Démarrage Instantané Sans Blocage',
+        description:
+          "Suppression définitive du pop-up intrusif au lancement. L'écran d'accueil, l'Appel Direct et les Réglages sont désormais immédiatement accessibles dès l'ouverture.",
+      },
+      {
+        category: '✨ Badge de Nouveautés Non-Intrusif',
+        description:
+          "Indicateur visuel animé discret sur le bouton de version dans l'en-tête pour signaler les mises à jour sans jamais bloquer vos interactions.",
+      },
+      {
+        category: '⌨️ Raccourci Échap & Fermeture Clavier',
+        description:
+          "Fermeture universelle de toutes les fenêtres modales (Paramètres, Appel Direct, Nouveautés, Mises à jour) via la touche Échap.",
+      },
+      {
+        category: '🔊 Fiabilité Web Audio',
+        description:
+          "Gestion propre et silencieuse de la reprise de contexte audio suspendu pour une réactivité maximale sur navigateurs mobiles et de bureau.",
+      },
+    ],
+  },
+  {
+    version: '1.2.0',
+    date: '01 Novembre 2026',
     title: 'Optimisation Globale : Streaming SSE, Bundle Réduit de 50% & Cues Audio',
     highlights: [
       {

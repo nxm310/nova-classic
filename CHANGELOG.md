@@ -4,6 +4,21 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.2.1] — 2026-11-01
+
+### 🔓 Ergonomie & Accessibilité : Démarrage Sans Blocage & Badge Non-Intrusif
+* **Suppression du Pop-up Bloquant au Démarrage** :
+  * Élimination de l'ouverture automatique intempestive de la fenêtre Nouveautés sur l'écran d'accueil lors du lancement de l'application.
+  * Les options « Appel Direct », « Réglages », « Vision » et le champ de saisie sont immédiatement cliquables et fonctionnels dès la première seconde.
+* **Badge Discret et Animé de Nouveautés** :
+  * Un repère lumineux animé signale l'existence d'une mise à jour directement sur le bouton de version de l'en-tête (`v1.2.1`) sans jamais entraver la navigation.
+* **Support Clavier Échap (Escape)** :
+  * Possibilité de fermer instantanément n'importe quelle boîte modale (Paramètres, Appel Mains-Libres, Nouveautés, État de mise à jour) avec la touche Échap.
+* **Sécurisation de Contexte Web Audio** :
+  * Gestion silencieuse des reprises de contexte audio pour éviter tout avertissement de console sur contextes audio suspendus.
+
+---
+
 ## [v1.2.0] — 2026-11-01
 
 ### 🚀 Optimisation Globale : Streaming SSE, Bundle Réduit de 50% & Cues Audio

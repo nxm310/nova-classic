@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Sparkles, X, Check, ArrowRight, ExternalLink, RefreshCw } from 'lucide-react';
 import { CHANGELOG_DATA } from '@/lib/changelogData';
 import { APP_VERSION } from '@/lib/version';
@@ -18,6 +18,17 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
   onCheckUpdate,
   isCheckingUpdate = false,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
