@@ -5,6 +5,16 @@ let currentAudio: HTMLAudioElement | null = null;
 let sharedAudioContext: AudioContext | null = null;
 let isAudioUnlocked = false;
 let primedAudioElement: HTMLAudioElement | null = null;
+let activeBlobUrl: string | null = null;
+
+function revokeActiveBlob() {
+  if (activeBlobUrl) {
+    try {
+      URL.revokeObjectURL(activeBlobUrl);
+    } catch {}
+    activeBlobUrl = null;
+  }
+}
 
 // Audio silencieux encodé en base64 (format WAV 44 bytes valide ultra-court)
 const SILENT_WAV_BASE64 = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAP//';
@@ -121,6 +131,14 @@ export const audioManager = {
   ): HTMLAudioElement {
     this.stopAll();
 
+    // Révocation de l'ancien blob pour libérer la mémoire vive
+    if (activeBlobUrl && activeBlobUrl !== src) {
+      revokeActiveBlob();
+    }
+    if (src && src.startsWith('blob:')) {
+      activeBlobUrl = src;
+    }
+
     // Forcer le canal média standard (musique / vidéo) et déverrouiller
     enforceMediaAudioSession();
     unlockAudioContext().catch(() => {});
@@ -155,6 +173,7 @@ export const audioManager = {
     const cleanup = () => {
       if (cleanupDone) return;
       cleanupDone = true;
+      revokeActiveBlob();
       if (currentAudio === audio) {
         currentAudio = null;
       }
@@ -254,6 +273,7 @@ export const audioManager = {
   },
 
   stopAll(): void {
+    revokeActiveBlob();
     if (currentAudio) {
       try {
         currentAudio.pause();
@@ -265,6 +285,77 @@ export const audioManager = {
       } catch {}
       currentAudio = null;
     }
+  },
+
+  /**
+   * Émet un micro-bip synthétisé montant doux pour indiquer que le micro écoute (mode mains-libres).
+   * Zéro fichier externe, 100% procédural via AudioContext natif.
+   */
+  playListeningCue(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtxClass) return;
+      if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+        sharedAudioContext = new AudioCtxClass();
+      }
+      if (sharedAudioContext.state === 'suspended') {
+        sharedAudioContext.resume();
+      }
+      const ctx = sharedAudioContext;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.06, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } catch {}
+  },
+
+  /**
+   * Émet un micro-bip synthétisé discret pour confirmer la prise en compte de la parole (réflexion).
+   */
+  playThinkingCue(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtxClass) return;
+      if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+        sharedAudioContext = new AudioCtxClass();
+      }
+      if (sharedAudioContext.state === 'suspended') {
+        sharedAudioContext.resume();
+      }
+      const ctx = sharedAudioContext;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // Ré5
+      osc.frequency.exponentialRampToValueAtTime(440, now + 0.08); // La4
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.05, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.09);
+    } catch {}
   },
 
   // --- Reconnaissance Vocale (Dictée au micro) ---

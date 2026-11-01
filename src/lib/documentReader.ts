@@ -1,5 +1,4 @@
 // Extracteur de texte côté client pour PDF, ePub et fichiers texte
-import JSZip from 'jszip';
 
 export interface ExtractedDocument {
   name: string;
@@ -37,14 +36,17 @@ function cleanHtmlToText(html: string): string {
 /**
  * Extrait le texte d'un livre numérique ePub (.epub).
  * Un ePub est une archive ZIP contenant des fichiers XHTML/HTML structurés.
+ * JSZip est chargé dynamiquement pour préserver la légèreté du bundle initial.
  */
 export async function extractTextFromEpub(file: File): Promise<ExtractedDocument> {
+  const JSZipModule = await import('jszip');
+  const JSZip = (JSZipModule.default || JSZipModule) as any;
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
   // Chercher tous les fichiers de chapitres XHTML / HTML / XML
   const contentFiles: { path: string; file: any }[] = [];
-  zip.forEach((relativePath, zipEntry) => {
+  zip.forEach((relativePath: string, zipEntry: any) => {
     if (
       !zipEntry.dir &&
       /\.(xhtml|html|htm|xml)$/i.test(relativePath) &&

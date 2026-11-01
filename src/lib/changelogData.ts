@@ -12,9 +12,42 @@ export interface ChangelogVersion {
 
 export const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: '1.2.0',
+    date: '01 Novembre 2026',
+    isLatest: true,
+    title: 'Optimisation Globale : Streaming SSE, Bundle Réduit de 50% & Cues Audio',
+    highlights: [
+      {
+        category: '⚡ Streaming de Réponse Temps Réel (SSE)',
+        description:
+          "Intégration du flux streamGenerateContent : les réponses textuelles s'affichent instantanément mot par mot (latence TTFT divisée par 4) pour une sensation d'interactivité immédiate.",
+      },
+      {
+        category: '🚀 Réduction de 50% du Bundle Initial',
+        description:
+          "Chargement asynchrone à la demande de JSZip lors de la lecture d'ePubs. Le poids du bundle principal de la page d'accueil passe de 70 Ko à seulement 36 Ko.",
+      },
+      {
+        category: '🔔 Earcons Web Audio Procéduraux (Mode Mains-Libres)',
+        description:
+          "Micro-bips sonores doux et instantanés générés nativement pour signaler les transitions d'écoute et de réflexion sans quitter la route ou son écran des yeux.",
+      },
+      {
+        category: '🧹 Nettoyage Mémoire & Protection LocalStorage',
+        description:
+          "Révocation automatique des URLs blobs audio pour libérer la RAM sur mobile, et élagage automatique des documents lourds pour prévenir toute saturation du quota de stockage.",
+      },
+      {
+        category: '🧩 Architecture Modulaire',
+        description:
+          "Découpage du composant principal avec l'extraction d'UpdateModal.tsx pour une maintenance facilitée et des rendus plus rapides.",
+      },
+    ],
+  },
+  {
     version: '1.1.1',
     date: '08 Octobre 2026',
-    isLatest: true,
+    isLatest: false,
     title: 'Migration API Gemini 2026 : thinking_level & Paramètres Dépréciés',
     highlights: [
       {

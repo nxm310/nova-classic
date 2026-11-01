@@ -66,8 +66,38 @@ export const storage = {
 
   saveMessages(messages: ChatMessage[]): void {
     if (typeof window === 'undefined') return;
-    const truncated = messages.slice(-100);
-    localStorage.setItem(KEYS.MESSAGES, JSON.stringify(truncated));
+    try {
+      // Nettoyer et conserver les 80 derniers messages pour éviter de saturer le quota du localStorage
+      const sanitized = messages.slice(-80).map((m) => {
+        if (m.attachedDocument) {
+          return {
+            ...m,
+            attachedDocument: {
+              name: m.attachedDocument.name,
+              size: m.attachedDocument.size,
+              type: m.attachedDocument.type,
+              pageCount: m.attachedDocument.pageCount,
+              charCount: m.attachedDocument.charCount,
+            },
+          };
+        }
+        return m;
+      });
+      localStorage.setItem(KEYS.MESSAGES, JSON.stringify(sanitized));
+    } catch (err) {
+      console.warn('[Storage] Quota localStorage dépassé, élagage automatique des messages...', err);
+      try {
+        const fallback = messages.slice(-25).map((m) => ({
+          ...m,
+          attachedDocument: m.attachedDocument ? {
+            name: m.attachedDocument.name,
+            size: m.attachedDocument.size,
+            type: m.attachedDocument.type,
+          } : undefined,
+        }));
+        localStorage.setItem(KEYS.MESSAGES, JSON.stringify(fallback));
+      } catch {}
+    }
   },
 
   clearMessages(): void {

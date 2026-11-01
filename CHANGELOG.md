@@ -4,6 +4,24 @@ Document récapitulatif centralisé de toutes les versions de Nova Classic, comp
 
 ---
 
+## [v1.2.0] — 2026-11-01
+
+### 🚀 Optimisation Globale : Streaming SSE, Bundle Réduit de 50% & Cues Audio
+* **Streaming de Réponse en Temps Réel (`streamGenerateContent`)** :
+  * Intégration de l'endpoint SSE (`alt=sse`) permettant l'affichage mot par mot dès les premières 300 ms de génération, éliminant l'attente passive.
+* **Allègement Majeur du Bundle Client (-50% sur la route principale)** :
+  * Chargement dynamique asynchrone de `jszip` à l'ouverture effective d'un fichier ePUB, réduisant la taille du code JavaScript initial de 70.8 Ko à 36.7 Ko.
+* **Earcons Web Audio Procéduraux pour le Mode Appel Mains-Libres** :
+  * Micro-bips sonores légers et synthétisés à la volée via l'API Web Audio pour indiquer à l'utilisateur quand Nova se met à écouter ou valide la fin de prise de parole sans avoir à fixer l'écran.
+* **Gestion Mémoire & Nettoyage des Blobs Audio (`URL.revokeObjectURL`)** :
+  * Libération instantanée de la mémoire RAM des flux audio décodés pour éviter les fuites de mémoire sur iOS Safari et navigateurs mobiles lors de longs échanges vocaux.
+* **Sécurisation du Stockage Local (Protection contre `QuotaExceededError`)** :
+  * Élagage automatique des textes lourds de documents dans le `localStorage` persistant pour garantir que l'application ne dépasse jamais le quota de 5 Mo.
+* **Architecture Modulaire** :
+  * Extraction du composant `UpdateModal.tsx` pour assainir et alléger le composant racine `page.tsx`.
+
+---
+
 ## [v1.1.1] — 2026-10-08
 
 ### ⚡ Migration API Gemini 2026 : thinking_level & Paramètres Dépréciés

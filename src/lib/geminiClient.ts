@@ -8,6 +8,7 @@ export interface ChatRequestOptions {
   apiKey: string;
   memories?: MemoryItem[];
   imageBase64?: string;
+  onChunk?: (streamedText: string) => void;
 }
 
 export const geminiClient = {
@@ -17,6 +18,7 @@ export const geminiClient = {
     apiKey,
     memories,
     imageBase64,
+    onChunk,
   }: ChatRequestOptions): Promise<string> {
     const key = (apiKey || '').trim();
     if (!key) {
@@ -107,7 +109,10 @@ ${memoriesText}
 6. VISION D'ÉCRAN EN DIRECT : Si une image de capture d'écran est attachée au message, observe et analyse immédiatement ce qui est affiché (écran, fenêtres, terminal, documents, images) et réponds directement et précisément selon la longueur demandée.
 `.trim();
 
-    const contents: any[] = messages.map((m) => ({
+    // Optimisation de latence & quota de tokens : fenêtre glissante des 18 messages les plus récents
+    const recentMessages = messages.length > 18 ? messages.slice(-18) : messages;
+
+    const contents: any[] = recentMessages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
@@ -127,7 +132,7 @@ ${memoriesText}
     const getModelCandidates = (quality?: string): string[] => {
       switch (quality) {
         case '3.8-flash-tts':
-          return ['gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+          return ['gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-flash-lite'];
         case '3.8-flash':
           return ['gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-flash-lite'];
         case 'high':
@@ -136,7 +141,7 @@ ${memoriesText}
           return ['gemini-3.8-live', 'gemini-3.8-flash-tts', 'gemini-3.8-flash'];
         case 'fast':
         default:
-          return ['gemini-3.8-flash-tts', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+          return ['gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-flash-lite'];
       }
     };
 
@@ -156,9 +161,20 @@ ${memoriesText}
     let data: any = null;
 
     for (const model of candidateModels) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const isStreaming = typeof onChunk === 'function';
+      const url = isStreaming
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`
+        : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
-      const buildPayload = (withSearch: boolean) => ({
+      // Adaptation conforme Google Gemini 2026 :
+      // - Les modèles Flash supportent 'MINIMAL' pour une réponse conversationnelle quasi-instantanée
+      // - Les modèles Pro (Gemini 3 Pro) ne supportent PAS 'MINIMAL' (Flash uniquement) ; ils requièrent 'LOW' ou 'HIGH'
+      const isProModel = model.toLowerCase().includes('pro');
+      const thinkingLevel = isProModel
+        ? (selectedLength === 'detailed' ? 'HIGH' : 'LOW')
+        : 'MINIMAL';
+
+      const buildPayload = (withSearch: boolean, withThinking: boolean = true) => ({
         contents,
         system_instruction: {
           parts: [{ text: systemInstruction }],
@@ -166,12 +182,13 @@ ${memoriesText}
         ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
         generationConfig: {
           maxOutputTokens: lengthSetting.maxTokens,
-          // Remplacement conforme Google Gemini 2026 :
-          // thinkingLevel 'minimal' pour réponse conversationnelle instantanée
-          // (remplace thinking_budget déprécié, et supprime temperature, top_p, top_k)
-          thinkingConfig: {
-            thinkingLevel: 'minimal',
-          },
+          ...(withThinking
+            ? {
+                thinkingConfig: {
+                  thinkingLevel,
+                },
+              }
+            : {}),
         },
       });
 
@@ -179,19 +196,77 @@ ${memoriesText}
         let response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildPayload(needsSearch)),
+          body: JSON.stringify(buildPayload(needsSearch, true)),
         });
 
+        // 1er repli : recherche Google non disponible sur ce modèle ou cette région
         if (!response.ok && needsSearch) {
-          console.warn(`[Gemini] Recherche Google non disponible pour ${model}, repli sans recherche...`);
+          console.warn(`[Gemini] Recherche Google non disponible pour ${model}, tentative sans recherche...`);
           response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(buildPayload(false)),
+            body: JSON.stringify(buildPayload(false, true)),
+          });
+        }
+
+        // 2e repli : modèle rejetant thinkingConfig (erreur 400 INVALID_ARGUMENT)
+        if (!response.ok && response.status === 400) {
+          console.warn(`[Gemini] thinkingConfig non supporté pour ${model} (400), tentative sans thinkingConfig...`);
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildPayload(false, false)),
           });
         }
 
         if (response.ok) {
+          if (isStreaming && response.body) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let sseBuffer = '';
+            let accumulatedStreamText = '';
+            let finishReasonStream: string | undefined = undefined;
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              sseBuffer += decoder.decode(value, { stream: true });
+              const lines = sseBuffer.split('\n');
+              sseBuffer = lines.pop() || '';
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('data:')) {
+                  const jsonStr = trimmed.replace(/^data:\s*/, '');
+                  if (!jsonStr || jsonStr === '[DONE]') continue;
+                  try {
+                    const chunkObj = JSON.parse(jsonStr);
+                    const chunkCandidate = chunkObj.candidates?.[0];
+                    const chunkPart = chunkCandidate?.content?.parts?.[0]?.text;
+                    if (chunkPart) {
+                      accumulatedStreamText += chunkPart;
+                      onChunk!(accumulatedStreamText);
+                    }
+                    if (chunkCandidate?.finishReason) {
+                      finishReasonStream = chunkCandidate.finishReason;
+                    }
+                    if (chunkObj.usageMetadata) {
+                      const pTokens = Number(chunkObj.usageMetadata.promptTokenCount) || 0;
+                      const cTokens = Number(chunkObj.usageMetadata.candidatesTokenCount) || 0;
+                      try {
+                        storage.addTokens(pTokens, cTokens);
+                      } catch {}
+                    }
+                  } catch {}
+                }
+              }
+            }
+
+            if (accumulatedStreamText) {
+              return ensureCompleteSentence(accumulatedStreamText, finishReasonStream);
+            }
+          }
+
           data = await response.json();
           break;
         } else {

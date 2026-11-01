@@ -2,6 +2,7 @@
 .next/
 out/
 .github/
+*.tsbuildinfo
 
 # Dependencies
 node_modules/
